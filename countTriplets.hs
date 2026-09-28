@@ -24,7 +24,7 @@ compareTriplets = do
   finalB <- readIORef scoreB
   putStrLn $ show finalA ++ " " ++ show finalB
 
--- Instead of mutating variables in a loop we can process the list using zip and a pure foldl
+-- second attempt, instead of mutating variables in a loop we can process the list using zip and a pure foldl
 compareTripletsPure :: [Int] -> [Int] -> (Int, Int)
 compareTripletsPure a b = foldl' updateScore (0, 0) (zip a b) -- foldl is lazy evaluated, which can cause large thunk to sit in memory or may crash on long lists
   where
@@ -40,7 +40,7 @@ main = do
  let (finalA, finalB) = compareTripletsPure a b
  putStrLn $ show finalA ++ " " ++ show finalB
 
--- ultra concise approach using filter
+-- third attempt, found online, ultra concise approach using filter
 mainConcise :: IO ()
 mainConcise = do
   a <- getLine

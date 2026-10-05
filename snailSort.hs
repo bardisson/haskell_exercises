@@ -1,13 +1,20 @@
+{-|
+ Found some pretty obvious optimizations during this problem. Also didn't realize that we could use reverse transpose to do the "ring peel" technique. i.e.:  
+
+  A ring peel is "take the top row, rotate the rest counterclockwise, repeat":
+  
+  import Data.List (transpose)
+  
+  snail :: [[a]] -> [a]
+  snail []       = []
+  snail (x:xs)   = x ++ snail (reverse (transpose xs))
+  
+  transpose + reverse is the counterclockwise rotation, so the next top row is the old right column
+-}
+
+
 import Debug.Trace (trace)
 -- https://www.codewars.com/kata/521c2db8ddc89b9b7a0000c1
--- Given an n x n array, return the array elements arranged from outermost elements to the middle element, traveling clockwise.
--- 
--- array = [[1,2,3],
---          [4,5,6],
---          [7,8,9]]
--- snail(array) #=> [1,2,3,6,9,8,7,4,5]
--- 
--- This list is square and not empty -- so no need to check this
 
 testList = [[1,2,3], [4,5,6], [7,8,9]] -- this is not an Array, but a list of lists; not using Data.Array 
 testList2 = [[1,2,3,1], [4,5,6,4], [7,8,9,7], [7,8,9,7]] -- this is not an Array, but a list of lists; not using Data.Array 
@@ -42,8 +49,9 @@ everyN n xs = case drop (n - 1) xs of
 
 {-|
  Returns every n-th value in list, starting from offset
- Very inefficient since we need to reevaluate pointer index (w/ !!) on every operation
+ Very inefficient since we need to reevaluate pointer index (w/ !!) on every operation.
 -}
+-- TODO: This won't evaluate online because it is too slow O(n^3) since xs !! i is O(i) over an array of length n, each column costs O(n^2) with O(n) for "length xs"
 everyNOffset :: Int -> Int -> [Int] -> [Int]
 everyNOffset n offs xs
   | (n - offs) >= 0 = [xs !! i | i <- [offs + (1*n), offs + (2*n) .. (length xs-1)]]
@@ -52,78 +60,55 @@ everyNOffset n offs xs
 eleA2B :: Int -> Int -> [Int] -> [Int]
 eleA2B start stop array = take (stop - start + 1)(drop start array)
 
--- This first approach was trying to build the list without flattening the input list -- changing approach
---main :: IO ()
---main = do
---  let (maxR, maxC) = getBounds testList
---  let outList = eleA2B 0 maxC (extractRow testList 0)
---  printBounds(maxR, maxC)
---  print (outList :: [Int])
-
 {-|
  Flatten the 2D list using an "unbind" with the identity function.
  I.e.: id flip(>>=) input_list
 -}
+-- TODO: This is really just "concat"
 flatten2D :: [[Int]] -> [Int]
 flatten2D list = id =<< list
 
---snail :: [Int] -> Int -> [Int]  -- input list, n (n x n square), outputs ordered list
---snail list n = go currR currC
---  where
-  -- iter 0
-  -- row currR;         currC to (col n-1)
-  -- col n - currC;     currR to (row n-1)
-  -- row n - currR;     col n - currC to currC + 1 && reverse()
-  -- col currC;         row n - currR to (currR + 1) && reverse()
-  -- currR & currC + 1
-  -- iter 1
-  -- row currR;         currC to (col n-1)
-  -- col n - currC;     currR to (row n-1)
-  -- row n - currR;     
-
-buildRowFwd :: Int -> Int -> Int -> [Int] -> [Int]
-buildRowFwd currR currC n inputList = eleA2B start stop inputList
+buildRowFwd :: Int -> Int -> [Int] -> [Int]
+buildRowFwd currR n inputList = eleA2B start stop inputList
   where
     start = ( currR *      n ) + currR            -- start at specfic row offset
     stop  = ((currR + 1) * n ) - currR - offset
     offset = if even n then 1 else 2
 
-buildColFwd :: Int -> Int -> Int -> [Int] -> [Int]
-buildColFwd currR currC n inputList = init $ everyNOffset n offset inputList
+buildColFwd :: Int -> Int -> [Int] -> [Int]
+buildColFwd currR n inputList = init $ everyNOffset n offset inputList
   where   
   offset = (-n) + (n - 1 - currR)
 
-buildRowRev :: Int -> Int -> Int -> [Int] -> [Int]
-buildRowRev currR currC n inputList = init $ reverse $ eleA2B start stop inputList
+buildRowRev :: Int -> Int -> [Int] -> [Int]
+buildRowRev currR n inputList = init $ reverse $ eleA2B start stop inputList
   where
     row   = n - 1 - currR  -- extra decrement due to size being 1 indexed
     start = (n * row)
-    stop  = start + n - (currC + 1)
+    stop  = start + n - (currR + 1)
 
-buildColRev :: Int -> Int -> Int -> [Int] -> [Int]
-buildColRev currR currC n inputList = init $ reverse $ everyNOffset n offset inputList
+buildColRev :: Int -> Int -> [Int] -> [Int]
+buildColRev currR n inputList = init $ reverse $ everyNOffset n offset inputList
   where
-    offset = currC - n
+    offset = currR - n
 
-runCoilLoop :: Int -> Int -> Int -> [Int] -> [Int] -> [Int]
-runCoilLoop currR currC n matrix acc
+runCoilLoop :: Int -> Int -> [Int] -> [Int] -> [Int]
+runCoilLoop currR n matrix acc
   | checkComplete currR n = finalAcc -- return current accumulated list
-  | otherwise             = runCoilLoop nextR nextC n matrix updatedAcc
+  | otherwise             = runCoilLoop nextR n matrix updatedAcc
 
   where
-    recurseOut =     buildRowFwd currR currC n matrix
-                  ++ buildColFwd currR currC n matrix
-                  ++ buildRowRev currR currC n matrix
-                  ++ buildColRev currR currC n matrix
-
+  -- TODO: The "acc + recurseOut" is quadratic since it rewalks the accumulator every iteration. We shouldn't accumulate forward, but instead let laziness evaluate it 
+    recurseOut =     buildRowFwd currR n matrix
+                  ++ buildColFwd currR n matrix
+                  ++ buildRowRev currR n matrix
+                  ++ buildColRev currR n matrix
     updatedAcc = acc ++ recurseOut
     nextR = currR + 1
-    nextC = currC + 1
 
     finalAcc
-      | even n    = acc ++ buildRowFwd currR currC n matrix
---                  ++ buildColFwd currR currC n matrix
-                  ++ buildRowRev currR currC n matrix
+      | even n    = acc ++ buildRowFwd currR n matrix
+                  ++ buildRowRev currR n matrix
       | otherwise = acc ++ [matrix !! ( ( currR * n ) + 1 )]
   
 checkComplete :: Int -> Int -> Bool
@@ -134,6 +119,7 @@ checkComplete currR n =
     then evenCheck currR n
     else oddCheck currR n
 
+-- TODO: This doesn't guard against N < 3 which can cause this to never fire
 evenCheck :: Int -> Int -> Bool
 evenCheck currR n = currR == (n - 3) -- simplified from (n-1) - 2
 
@@ -148,8 +134,8 @@ main = do
   let n       = snd $ getBounds dut
   printBounds$ getBounds dut
   
-  let snakePath = runCoilLoop 0 0 n matrix []
+  let snakePath = runCoilLoop 0 n matrix []
   print snakePath
 
 snail :: [[Int]] -> [Int]
-snail array = runCoilLoop 0 0 (snd $ getBounds array ) (flatten2D array) []
+snail array = runCoilLoop 0 (snd $ getBounds array ) (flatten2D array) []

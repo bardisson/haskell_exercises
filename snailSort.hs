@@ -14,11 +14,16 @@
 
 
 import Debug.Trace (trace)
+import Data.List (transpose)
 -- https://www.codewars.com/kata/521c2db8ddc89b9b7a0000c1
 
 testList = [[1,2,3], [4,5,6], [7,8,9]] -- this is not an Array, but a list of lists; not using Data.Array 
 testList2 = [[1,2,3,1], [4,5,6,4], [7,8,9,7], [7,8,9,7]] -- this is not an Array, but a list of lists; not using Data.Array 
  
+
+-- #####################################
+-- #################### Helper Functions
+-- #####################################
 getBounds :: [[Int]] -> (Int, Int)
 getBounds array = (maxR, maxC) 
   where
@@ -92,25 +97,6 @@ buildColRev currR n inputList = init $ reverse $ everyNOffset n offset inputList
   where
     offset = currR - n
 
-runCoilLoop :: Int -> Int -> [Int] -> [Int] -> [Int]
-runCoilLoop currR n matrix acc
-  | checkComplete currR n = finalAcc -- return current accumulated list
-  | otherwise             = runCoilLoop nextR n matrix updatedAcc
-
-  where
-  -- TODO: The "acc + recurseOut" is quadratic since it rewalks the accumulator every iteration. We shouldn't accumulate forward, but instead let laziness evaluate it 
-    recurseOut =     buildRowFwd currR n matrix
-                  ++ buildColFwd currR n matrix
-                  ++ buildRowRev currR n matrix
-                  ++ buildColRev currR n matrix
-    updatedAcc = acc ++ recurseOut
-    nextR = currR + 1
-
-    finalAcc
-      | even n    = acc ++ buildRowFwd currR n matrix
-                  ++ buildRowRev currR n matrix
-      | otherwise = acc ++ [matrix !! ( ( currR * n ) + 1 )]
-  
 checkComplete :: Int -> Int -> Bool
 checkComplete currR n =
   -- trace takes a message string and a return expression
@@ -126,16 +112,51 @@ evenCheck currR n = currR == (n - 3) -- simplified from (n-1) - 2
 oddCheck :: Int -> Int -> Bool
 oddCheck currR n = currR == (n - 2) -- simplified from (n-1) - 1
 
-main :: IO ()
-main = do
 
+-- #####################################
+-- ################ Solve Attempts
+-- #####################################
+
+runCoilLoop :: Int -> Int -> [Int] -> [Int] -> [Int]
+runCoilLoop currR n matrix acc
+  | checkComplete currR n = finalAcc -- return current accumulated list
+  | otherwise             = runCoilLoop nextR n matrix updatedAcc
+  where
+  -- TODO: The "acc + recurseOut" is quadratic since it rewalks the accumulator every iteration. We shouldn't accumulate forward, but instead let laziness evaluate it 
+    recurseOut =     buildRowFwd currR n matrix
+                  ++ buildColFwd currR n matrix
+                  ++ buildRowRev currR n matrix
+                  ++ buildColRev currR n matrix
+    updatedAcc = acc ++ recurseOut
+    nextR = currR + 1
+
+    finalAcc
+      | even n    = acc ++ buildRowFwd currR n matrix
+                  ++ buildRowRev currR n matrix
+      | otherwise = acc ++ [matrix !! ( ( currR * n ) + 1 )]
+
+method1 :: IO ()
+method1 = do
   let dut     = testList
   let matrix  = flatten2D dut
   let n       = snd $ getBounds dut
   printBounds$ getBounds dut
-  
   let snakePath = runCoilLoop 0 n matrix []
   print snakePath
 
-snail :: [[Int]] -> [Int]
-snail array = runCoilLoop 0 (snd $ getBounds array ) (flatten2D array) []
+snailProper :: [[a]] -> [a]
+snailProper [] = [] -- define a function for the empty list case
+-- use the cons operator for reverse pattern match; where x is the first row and xs is the remaining rows of the matrix
+snailProper (x:xs) = x ++ snailProper (reverse(transpose xs))
+-- ^ as the transpose extracts the line, it always transposes on a matrix with one less row; resulting in eventual termination
+
+method2 :: IO()
+method2 = do
+  print(snailProper testList :: [Int])
+  print(snailProper testList2 :: [Int])
+
+-- #####################################
+-- ############ Kata Submission Call
+-- #####################################
+--snail :: [[Int]] -> [Int]
+--snail array = runCoilLoop 0 (snd $ getBoundsarray ) (flatten2D array) []
